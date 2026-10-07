@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>History Dashboard - 100% Working</title>
+  <title>History & Sync API</title>
   <style>
     body {
       margin: 0;
@@ -49,7 +49,6 @@
       width: 10px;
       height: 10px;
       border-radius: 50%;
-      margin: 0 2px;
     }
     .dot.red { background: red; }
     .dot.green { background: lime; }
@@ -63,7 +62,6 @@
 </head>
 <body>
 
-  <!-- 30S Box -->
   <div class="history-box">
     <div class="history-title">HISTORY 1 — 30S DATA</div>
     <table>
@@ -81,7 +79,6 @@
     </table>
   </div>
 
-  <!-- 1M Box -->
   <div class="history-box">
     <div class="history-title">HISTORY 2 — 1M DATA</div>
     <table>
@@ -99,28 +96,9 @@
     </table>
   </div>
 
-  <!-- 3M Box -->
-  <div class="history-box">
-    <div class="history-title">HISTORY 3 — 3M DATA</div>
-    <table>
-      <thead>
-        <tr>
-          <th>Period</th>
-          <th>Number</th>
-          <th>Big/Small</th>
-          <th>Color</th>
-        </tr>
-      </thead>
-      <tbody id="history3m">
-        <tr><td colspan="4" class="loading">Loading 3M Data...</td></tr>
-      </tbody>
-    </table>
-  </div>
-
 <script>
-const HISTORY_30S_API = '/api/history/30s';
-const HISTORY_1M_API = '/api/history/1m';
-const HISTORY_3M_API = '/api/history/3m';
+const HISTORY_30S_API = 'https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json';
+const HISTORY_1M_API = 'https://draw.ar-lottery01.com/WinGo/WinGo_1M/GetHistoryIssuePage.json';
 
 function createHistoryRow(item) {
   const num = Number.parseInt(item.number, 10);
@@ -128,17 +106,11 @@ function createHistoryRow(item) {
 
   const period = String(item.issueNumber ?? "");
   const size = num >= 5 ? "Big" : "Small";
-  
-  let colors = [];
-  if (item.color) {
-    colors = item.color.split(',').map(c => c.trim());
-  } else {
-    if ([1, 3, 7, 9].includes(num)) colors = ["green"];
-    else if ([2, 4, 6, 8].includes(num)) colors = ["red"];
-    else colors = num === 0 ? ["red", "violet"] : ["green", "violet"];
-  }
+  let color;
 
-  const primaryColor = colors[0] || "green";
+  if ([1, 3, 7, 9].includes(num)) color = "green";
+  else if ([2, 4, 6, 8].includes(num)) color = "red";
+  else color = "violet";
 
   const row = document.createElement("tr");
 
@@ -146,18 +118,16 @@ function createHistoryRow(item) {
   periodCell.textContent = period;
 
   const numberCell = document.createElement("td");
-  numberCell.className = "num " + primaryColor;
+  numberCell.className = "num " + color;
   numberCell.textContent = num;
 
   const sizeCell = document.createElement("td");
   sizeCell.textContent = size;
 
   const colorCell = document.createElement("td");
-  colors.forEach(c => {
-    const dot = document.createElement("span");
-    dot.className = "dot " + c;
-    colorCell.appendChild(dot);
-  });
+  const dot = document.createElement("span");
+  dot.className = "dot " + color;
+  colorCell.appendChild(dot);
 
   row.appendChild(periodCell);
   row.appendChild(numberCell);
@@ -167,39 +137,82 @@ function createHistoryRow(item) {
   return row;
 }
 
-async function loadHistory(apiURL, tbodyID, label) {
+// সার্ভারে ডেটা সিংক্রোনাইজ করার ফাংশন
+async function syncDataToServer(type, list) {
+  try {
+    const formattedData = list.map(item => {
+      const num = Number.parseInt(item.number, 10);
+      const size = num >= 5 ? "Big" : "Small";
+      let color = [1, 3, 7, 9].includes(num) ? "green" : ([2, 4, 6, 8].includes(num) ? "red" : "violet");
+      
+      return {
+        Period: String(item.issueNumber ?? ""),
+        Number: num,
+        Size: size,
+        Colour: color,
+        Time: new Date().toLocaleTimeString()
+      };
+    });
+
+    await fetch('/api/sync-history', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type, data: formattedData })
+    });
+  } catch (err) {
+    console.error("Sync error:", err);
+  }
+}
+
+async function loadHistory(apiURL, tbodyID, label, typeKey) {
   const tbody = document.getElementById(tbodyID);
   try {
-    const response = await fetch(apiURL);
+    const response = await fetch(apiURL + "?ts=" + Date.now(), { cache: "no-store" });
     if (!response.ok) throw new Error("Network error");
+    
     const data = await response.json();
-
-    if (!data.data || !Array.isArray(data.data.list)) {
-      throw new Error("Invalid API response");
-    }
+    if (!data.data || !Array.isArray(data.data.list)) throw new Error("Invalid API response");
 
     const list = data.data.list.slice(0, 10);
-    const fragment = document.createDocumentFragment();
 
+    // সার্ভারে ডেটা পাঠিয়ে দেওয়া হলো
+    syncDataToServer(typeKey, list);
+
+    const fragment = document.createDocumentFragment();
     list.forEach(item => {
       const row = createHistoryRow(item);
       if (row) fragment.appendChild(row);
     });
 
     tbody.replaceChildren(fragment);
+
+    if (!tbody.children.length) {
+      const row = document.createElement("tr");
+      const cell = document.createElement("td");
+      cell.colSpan = 4;
+      cell.className = "loading";
+      cell.textContent = "No valid " + label + " data found";
+      row.appendChild(cell);
+      tbody.appendChild(row);
+    }
   } catch (error) {
-    // Silent catch, fallback handles everything
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+    cell.colSpan = 4;
+    cell.className = "error";
+    cell.textContent = "Failed to load " + label + " history";
+    row.appendChild(cell);
+    tbody.replaceChildren(row);
   }
 }
 
-function fetchAllData() {
-  loadHistory(HISTORY_30S_API, "history30s", "30S");
-  loadHistory(HISTORY_1M_API, "history1m", "1M");
-  loadHistory(HISTORY_3M_API, "history3m", "3M");
+function runLoads() {
+  loadHistory(HISTORY_30S_API, "history30s", "30S", "30s");
+  loadHistory(HISTORY_1M_API, "history1m", "1M", "1m");
 }
 
-fetchAllData();
-setInterval(fetchAllData, 5000);
+runLoads();
+setInterval(runLoads, 5000);
 </script>
 
 </body>
