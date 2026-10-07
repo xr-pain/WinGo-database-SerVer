@@ -23,7 +23,6 @@ function formatItemData(item) {
     if ([2, 4, 6, 8].includes(num)) color = 'red';
     else if (num === 0 || num === 5) color = num === 0 ? 'red,violet' : 'green,violet';
 
-    // বর্তমান লাইভ সময়
     const exactTime = new Date().toLocaleTimeString();
 
     return {
@@ -35,25 +34,6 @@ function formatItemData(item) {
     };
 }
 
-// ব্যাকআপ বা ফলব্যাক ডেটা জেনারেটর (এপিআই ফেইল করলে এটি কাজ করবে, পেজে কোনো এরর দেখাবে না)
-function generateFallbackList() {
-    const list = [];
-    let baseIssue = Date.now().toString().slice(0, 10) + '10005';
-    for (let i = 0; i < 5; i++) {
-        const num = Math.floor(Math.random() * 10);
-        let color = 'green';
-        if ([2, 4, 6, 8].includes(num)) color = 'red';
-        else if (num === 0 || num === 5) color = num === 0 ? 'red,violet' : 'green,violet';
-        
-        list.push({
-            issueNumber: (BigInt(baseIssue) - BigInt(i)).toString(),
-            number: num.toString(),
-            color: color
-        });
-    }
-    return list;
-}
-
 const customHeaders = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
     'Accept': 'application/json, text/plain, */*',
@@ -61,47 +41,52 @@ const customHeaders = {
 };
 
 async function handleApiRequest(req, res, urlKey, category) {
-    let rawList = [];
     try {
         const response = await fetch(`https://draw.ar-lottery01.com/WinGo/WinGo_${urlKey}/GetHistoryIssuePage.json?ts=` + Date.now(), {
             headers: customHeaders
         });
-        if (!response.ok) throw new Error('API blocked or error');
+        
+        if (!response.ok) {
+            throw new Error(`API Error status: ${response.status}`);
+        }
         
         const rawData = await response.json();
-        if (rawData && rawData.data && Array.isArray(rawData.data.list)) {
-            rawList = rawData.data.list;
-        } else {
-            throw new Error('Invalid format');
+        if (!rawData || !rawData.data || !Array.isArray(rawData.data.list)) {
+            throw new Error('Invalid data format from API');
         }
+
+        const rawList = rawData.data.list;
+        const formattedList = rawList.map(item => formatItemData(item));
+
+        // শুধু নতুন ডেটা ফিল্টার করা
+        let latestItems = formattedList;
+        if (lastProcessedIssues[category]) {
+            const lastIndex = formattedList.findIndex(i => i.Period === lastProcessedIssues[category]);
+            if (lastIndex > 0) {
+                latestItems = formattedList.slice(0, lastIndex);
+            } else if (lastIndex === 0) {
+                latestItems = []; // নতুন ডেটা না থাকলে খালি দেখাবে
+            }
+        }
+
+        if (formattedList.length > 0) {
+            lastProcessedIssues[category] = formattedList[0].Period;
+        }
+
+        // সরাসরি আপনার কাঙ্ক্ষিত ফরম্যাটে ডেটা রিটার্ন করা
+        res.json({
+            success: true,
+            data: latestItems
+        });
+
     } catch (error) {
-        // এপিআই ফেইল করলে অটোমেটিক ফলব্যাক লিস্ট নিয়ে নিবে, কোনো এরর দেখাবে না
-        rawList = generateFallbackList();
+        // কোনো কারণে রিয়েল এপিআই ফেইল করলে সরাসরি রিয়েল এরর মেসেজ দেখাবে, কোনো ফেক ডেটা দেখাবে না
+        res.status(500).json({ 
+            success: false, 
+            error: error.message,
+            message: "Real API failed to respond. Check if IP is blocked." 
+        });
     }
-
-    // ফরম্যাট করা
-    const formattedList = rawList.map(item => formatItemData(item));
-
-    // শুধু নতুন ডেটা ফিল্টার করা
-    let latestItems = formattedList;
-    if (lastProcessedIssues[category]) {
-        const lastIndex = formattedList.findIndex(i => i.Period === lastProcessedIssues[category]);
-        if (lastIndex > 0) {
-            latestItems = formattedList.slice(0, lastIndex);
-        } else if (lastIndex === 0) {
-            latestItems = [formattedList[0]];
-        }
-    }
-
-    if (formattedList.length > 0) {
-        lastProcessedIssues[category] = formattedList[0].Period;
-    }
-
-    // আপনার চাওয়া ফরম্যাটে JSON আউটপুট পাঠানো
-    res.json({
-        success: true,
-        data: latestItems
-    });
 }
 
 app.get('/api/history/30s', (req, res) => handleApiRequest(req, res, '30S', '30s'));
