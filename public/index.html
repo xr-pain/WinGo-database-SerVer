@@ -98,13 +98,18 @@
   </div>
 
 <script>
+const API_30S = 'https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json';
+const API_1M = 'https://draw.ar-lottery01.com/WinGo/WinGo_1M/GetHistoryIssuePage.json';
+
 function createHistoryRow(item) {
-  const num = Number.parseInt(item.Number, 10);
+  const num = Number.parseInt(item.number, 10);
   if (!Number.isInteger(num) || num < 0 || num > 9) return null;
 
-  const period = String(item.Period ?? "");
-  const size = item.Size;
-  const color = item.Colour;
+  const period = String(item.issueNumber ?? "");
+  const size = num >= 5 ? "Big" : "Small";
+  let color = 'green';
+  if ([2, 4, 6, 8].includes(num)) color = "red";
+  else if (num === 0 || num === 5) color = num === 0 ? "red,violet" : "green,violet";
 
   const row = document.createElement("tr");
 
@@ -132,44 +137,73 @@ function createHistoryRow(item) {
   return row;
 }
 
-async function loadHistory(type, tbodyID, label) {
+// ব্রাউজার থেকে সার্ভারে ডেটা পাঠিয়ে দেওয়া
+async function syncToServer(type, rawList) {
+  try {
+    const formattedList = rawList.map(item => {
+      const num = Number.parseInt(item.number, 10);
+      const size = num >= 5 ? "Big" : "Small";
+      let color = 'green';
+      if ([2, 4, 6, 8].includes(num)) color = "red";
+      else if (num === 0 || num === 5) color = num === 0 ? "red,violet" : "green,violet";
+
+      return {
+        Period: String(item.issueNumber ?? ""),
+        Number: num,
+        Size: size,
+        Colour: color,
+        Time: new Date().toLocaleTimeString()
+      };
+    });
+
+    await fetch('/api/sync-history', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type, data: formattedList })
+    });
+  } catch (e) {
+    console.error("Sync failed", e);
+  }
+}
+
+async function loadHistory(apiUrl, type, tbodyID, label) {
   const tbody = document.getElementById(tbodyID);
   try {
-    const response = await fetch(`/proxy/${type}?ts=` + Date.now(), { cache: "no-store" });
-    if (!response.ok) throw new Error("API Connection Failed");
+    const response = await fetch(apiUrl + "?ts=" + Date.now(), { cache: "no-store" });
+    if (!response.ok) throw new Error("Network error");
     
     const result = await response.json();
-    if (!result.success || !result.data || !Array.isArray(result.data.list)) {
-      throw new Error("Invalid API response");
+    if (!result.data || !Array.isArray(result.data.list)) {
+      throw new Error("Invalid structure");
     }
 
-    const list = result.data.list.slice(0, 10);
-    const fragment = document.createDocumentFragment();
+    const rawList = result.data.list.slice(0, 10);
+    
+    // সার্ভারে ডেটা সিংক্রোনাইজ করুন
+    syncToServer(type, rawList);
 
-    list.forEach(item => {
+    const fragment = document.createDocumentFragment();
+    rawList.forEach(item => {
       const row = createHistoryRow(item);
       if (row) fragment.appendChild(row);
     });
 
     tbody.replaceChildren(fragment);
 
-    if (!tbody.children.length) {
-      throw new Error("No data found");
-    }
   } catch (error) {
     const row = document.createElement("tr");
     const cell = document.createElement("td");
     cell.colSpan = 4;
     cell.className = "error";
-    cell.textContent = "Failed to load " + label + " (API Blocked)";
+    cell.textContent = "Failed to load " + label;
     row.appendChild(cell);
     tbody.replaceChildren(row);
   }
 }
 
 function runLoads() {
-  loadHistory('30s', 'history30s', '30S');
-  loadHistory('1m', 'history1m', '1M');
+  loadHistory(API_30S, '30s', 'history30s', '30S');
+  loadHistory(API_1M, '1m', 'history1m', '1M');
 }
 
 runLoads();
