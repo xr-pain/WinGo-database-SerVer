@@ -63,9 +63,6 @@
 </head>
 <body>
 
-  <!-- ========================= -->
-  <!-- HISTORY 1 : 30 SECOND -->
-  <!-- ========================= -->
   <div class="history-box">
     <div class="history-title">HISTORY — 30S DATA</div>
     <table>
@@ -83,9 +80,6 @@
     </table>
   </div>
 
-  <!-- ========================= -->
-  <!-- HISTORY 2 : ONE MINUTE -->
-  <!-- ========================= -->
   <div class="history-box">
     <div class="history-title">HISTORY — 1M DATA</div>
     <table>
@@ -105,15 +99,12 @@
 
 <script>
 function createHistoryRow(item) {
-  const num = Number.parseInt(item.number, 10);
+  const num = Number.parseInt(item.Number, 10);
   if (!Number.isInteger(num) || num < 0 || num > 9) return null;
 
-  const period = String(item.issueNumber ?? "");
-  const size = num >= 5 ? "Big" : "Small";
-  let color = 'green';
-
-  if ([2, 4, 6, 8].includes(num)) color = "red";
-  else if (num === 0 || num === 5) color = "violet";
+  const period = String(item.Period ?? "");
+  const size = item.Size;
+  const color = item.Colour;
 
   const row = document.createElement("tr");
 
@@ -163,13 +154,7 @@ async function loadHistory(type, tbodyID, label) {
     tbody.replaceChildren(fragment);
 
     if (!tbody.children.length) {
-      const row = document.createElement("tr");
-      const cell = document.createElement("td");
-      cell.colSpan = 4;
-      cell.className = "loading";
-      cell.textContent = "No valid " + label + " data found";
-      row.appendChild(cell);
-      tbody.appendChild(row);
+      throw new Error("No data found");
     }
   } catch (error) {
     const row = document.createElement("tr");
