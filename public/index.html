@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>History Dashboard</title>
+  <title>History Dashboard - 3 Systems</title>
   <style>
     body {
       margin: 0;
@@ -62,8 +62,9 @@
 </head>
 <body>
 
+  <!-- 30S Box -->
   <div class="history-box">
-    <div class="history-title">HISTORY 1 — 30S DATA (Custom API)</div>
+    <div class="history-title">HISTORY 1 — 30S DATA</div>
     <table>
       <thead>
         <tr>
@@ -79,8 +80,9 @@
     </table>
   </div>
 
+  <!-- 1M Box -->
   <div class="history-box">
-    <div class="history-title">HISTORY 2 — 1M DATA (Custom API)</div>
+    <div class="history-title">HISTORY 2 — 1M DATA</div>
     <table>
       <thead>
         <tr>
@@ -96,10 +98,28 @@
     </table>
   </div>
 
+  <!-- 3M Box (নতুন যোগ করা হলো) -->
+  <div class="history-box">
+    <div class="history-title">HISTORY 3 — 3M DATA</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Period</th>
+          <th>Number</th>
+          <th>Big/Small</th>
+          <th>Color</th>
+        </tr>
+      </thead>
+      <tbody id="history3m">
+        <tr><td colspan="4" class="loading">Loading 3M Data...</td></tr>
+      </tbody>
+    </table>
+  </div>
+
 <script>
-// আমাদের নিজস্ব সার্ভারের API endpoints
 const HISTORY_30S_API = '/api/history/30s';
 const HISTORY_1M_API = '/api/history/1m';
+const HISTORY_3M_API = '/api/history/3m';
 
 function createHistoryRow(item) {
   const num = Number.parseInt(item.number, 10);
@@ -178,15 +198,17 @@ async function loadHistory(apiURL, tbodyID, label) {
   }
 }
 
-// Initial Load
-loadHistory(HISTORY_30S_API, "history30s", "30S");
-loadHistory(HISTORY_1M_API, "history1m", "1M");
-
-// Auto Refresh — Every 5 Seconds
-setInterval(() => {
+// Initial Load for all 3 APIs
+function fetchAllData() {
   loadHistory(HISTORY_30S_API, "history30s", "30S");
   loadHistory(HISTORY_1M_API, "history1m", "1M");
-}, 5000);
+  loadHistory(HISTORY_3M_API, "history3m", "3M");
+}
+
+fetchAllData();
+
+// Auto Refresh — Every 5 Seconds
+setInterval(fetchAllData, 5000);
 </script>
 
 </body>
