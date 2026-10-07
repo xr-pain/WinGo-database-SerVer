@@ -23,6 +23,7 @@ function formatItemData(item) {
     if ([2, 4, 6, 8].includes(num)) color = 'red';
     else if (num === 0 || num === 5) color = num === 0 ? 'red,violet' : 'green,violet';
 
+    // বর্তমান লাইভ সময়
     const exactTime = new Date().toLocaleTimeString();
 
     return {
@@ -34,16 +35,31 @@ function formatItemData(item) {
     };
 }
 
-const customHeaders = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+// শক্তিশালী ব্রাউজার হেডার যা 403 Forbidden বাইপাস করতে সাহায্য করবে
+const getCustomHeaders = (urlKey) => ({
+    'Host': 'draw.ar-lottery01.com',
+    'Connection': 'keep-alive',
+    'sec-ch-ua': '"Chromium";v="122", "Not(A:Brand";v="8", "Google Chrome";v="122"',
     'Accept': 'application/json, text/plain, */*',
+    'sec-ch-ua-mobile': '?0',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+    'sec-ch-ua-platform': '"Windows"',
+    'Origin': 'https://ar-lottery01.com',
+    'Sec-Fetch-Site': 'same-site',
+    'Sec-Fetch-Mode': 'cors',
+    'Sec-Fetch-Dest': 'empty',
+    'Referer': 'https://ar-lottery01.com/',
+    'Accept-Language': 'en-US,en;q=0.9',
     'Cache-Control': 'no-store'
-};
+});
 
 async function handleApiRequest(req, res, urlKey, category) {
     try {
-        const response = await fetch(`https://draw.ar-lottery01.com/WinGo/WinGo_${urlKey}/GetHistoryIssuePage.json?ts=` + Date.now(), {
-            headers: customHeaders
+        const targetUrl = `https://draw.ar-lottery01.com/WinGo/WinGo_${urlKey}/GetHistoryIssuePage.json?ts=` + Date.now();
+        
+        const response = await fetch(targetUrl, {
+            method: 'GET',
+            headers: getCustomHeaders(urlKey)
         });
         
         if (!response.ok) {
@@ -58,7 +74,7 @@ async function handleApiRequest(req, res, urlKey, category) {
         const rawList = rawData.data.list;
         const formattedList = rawList.map(item => formatItemData(item));
 
-        // শুধু নতুন ডেটা ফিল্টার করা
+        // শুধু নতুন ডেটা ফিল্টার করা (যা আগে দেখানো হয়নি)
         let latestItems = formattedList;
         if (lastProcessedIssues[category]) {
             const lastIndex = formattedList.findIndex(i => i.Period === lastProcessedIssues[category]);
@@ -73,18 +89,17 @@ async function handleApiRequest(req, res, urlKey, category) {
             lastProcessedIssues[category] = formattedList[0].Period;
         }
 
-        // সরাসরি আপনার কাঙ্ক্ষিত ফরম্যাটে ডেটা রিটার্ন করা
+        // আপনার কাঙ্ক্ষিত ফরম্যাটে আউটপুট পাঠানো
         res.json({
             success: true,
             data: latestItems
         });
 
     } catch (error) {
-        // কোনো কারণে রিয়েল এপিআই ফেইল করলে সরাসরি রিয়েল এরর মেসেজ দেখাবে, কোনো ফেক ডেটা দেখাবে না
         res.status(500).json({ 
             success: false, 
             error: error.message,
-            message: "Real API failed to respond. Check if IP is blocked." 
+            message: "Target API blocked the server IP. Please use a public CORS proxy or alternative endpoint." 
         });
     }
 }
