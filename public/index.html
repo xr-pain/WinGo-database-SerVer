@@ -136,7 +136,7 @@ async function loadHistory(type, tbodyID, label) {
   const tbody = document.getElementById(tbodyID);
   try {
     const response = await fetch(`/proxy/${type}?ts=` + Date.now(), { cache: "no-store" });
-    if (!response.ok) throw new Error("Network error");
+    if (!response.ok) throw new Error("API Connection Failed");
     
     const result = await response.json();
     if (!result.success || !result.data || !Array.isArray(result.data.list)) {
@@ -161,7 +161,7 @@ async function loadHistory(type, tbodyID, label) {
     const cell = document.createElement("td");
     cell.colSpan = 4;
     cell.className = "error";
-    cell.textContent = "Failed to load " + label + " history";
+    cell.textContent = "Failed to load " + label + " (API Blocked)";
     row.appendChild(cell);
     tbody.replaceChildren(row);
   }
