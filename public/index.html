@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>History Dashboard</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 16px;
+      background: #0e0e0e;
+      color: #fff;
+      font-family: Arial, sans-serif;
+    }
+    .history-box {
+      background: #1b1b1b;
+      border-radius: 12px;
+      overflow-x: auto;
+      box-shadow: 0 0 10px rgba(0,255,200,0.1);
+      margin-bottom: 18px;
+    }
+    .history-title {
+      text-align: center;
+      background: #292929;
+      color: #00ffc8;
+      font-size: 17px;
+      font-weight: bold;
+      padding: 12px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 350px;
+    }
+    th {
+      background: #222;
+      color: #FFD700;
+      padding: 10px;
+      font-size: 14px;
+    }
+    td {
+      padding: 10px;
+      font-size: 14px;
+      text-align: center;
+      border-bottom: 1px solid #333;
+    }
+    .dot {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+    .dot.red { background: red; }
+    .dot.green { background: lime; }
+    .dot.violet { background: violet; }
+    .num.red { color: #ff4c4c; font-weight: bold; }
+    .num.green { color: #00ff88; font-weight: bold; }
+    .num.violet { color: #bb66ff; font-weight: bold; }
+    .loading { color: #aaa; padding: 15px; }
+    .error { color: #ff4d4d; padding: 15px; }
+  </style>
+</head>
+<body>
+
+  <div class="history-box">
+    <div class="history-title">HISTORY 1 — 30S DATA (Custom API)</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Period</th>
+          <th>Number</th>
+          <th>Big/Small</th>
+          <th>Color</th>
+        </tr>
+      </thead>
+      <tbody id="history30s">
+        <tr><td colspan="4" class="loading">Loading 30S Data...</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="history-box">
+    <div class="history-title">HISTORY 2 — 1M DATA (Custom API)</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Period</th>
+          <th>Number</th>
+          <th>Big/Small</th>
+          <th>Color</th>
+        </tr>
+      </thead>
+      <tbody id="history1m">
+        <tr><td colspan="4" class="loading">Loading 1M Data...</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+<script>
+// আমাদের নিজস্ব সার্ভারের API endpoints
+const HISTORY_30S_API = '/api/history/30s';
+const HISTORY_1M_API = '/api/history/1m';
+
+function createHistoryRow(item) {
+  const num = Number.parseInt(item.number, 10);
+  if (!Number.isInteger(num) || num < 0 || num > 9) return null;
+
+  const period = String(item.issueNumber ?? "");
+  const size = num >= 5 ? "Big" : "Small";
+  let color;
+  if ([1, 3, 7, 9].includes(num)) color = "green";
+  else if ([2, 4, 6, 8].includes(num)) color = "red";
+  else color = "violet";
+
+  const row = document.createElement("tr");
+
+  const periodCell = document.createElement("td");
+  periodCell.textContent = period;
+
+  const numberCell = document.createElement("td");
+  numberCell.className = "num " + color;
+  numberCell.textContent = num;
+
+  const sizeCell = document.createElement("td");
+  sizeCell.textContent = size;
+
+  const colorCell = document.createElement("td");
+  const dot = document.createElement("span");
+  dot.className = "dot " + color;
+  colorCell.appendChild(dot);
+
+  row.appendChild(periodCell);
+  row.appendChild(numberCell);
+  row.appendChild(sizeCell);
+  row.appendChild(colorCell);
+
+  return row;
+}
+
+async function loadHistory(apiURL, tbodyID, label) {
+  const tbody = document.getElementById(tbodyID);
+  try {
+    const response = await fetch(apiURL);
+    if (!response.ok) throw new Error("Network error");
+    const data = await response.json();
+
+    if (!data.data || !Array.isArray(data.data.list)) {
+      throw new Error("Invalid API response");
+    }
+
+    const list = data.data.list.slice(0, 10);
+    const fragment = document.createDocumentFragment();
+
+    list.forEach(item => {
+      const row = createHistoryRow(item);
+      if (row) fragment.appendChild(row);
+    });
+
+    tbody.replaceChildren(fragment);
+
+    if (!tbody.children.length) {
+      const row = document.createElement("tr");
+      const cell = document.createElement("td");
+      cell.colSpan = 4;
+      cell.className = "loading";
+      cell.textContent = "No valid " + label + " data found";
+      row.appendChild(cell);
+      tbody.appendChild(row);
+    }
+  } catch (error) {
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+    cell.colSpan = 4;
+    cell.className = "error";
+    cell.textContent = "Failed to load " + label + " history";
+    row.appendChild(cell);
+    tbody.replaceChildren(row);
+  }
+}
+
+// Initial Load
+loadHistory(HISTORY_30S_API, "history30s", "30S");
+loadHistory(HISTORY_1M_API, "history1m", "1M");
+
+// Auto Refresh — Every 5 Seconds
+setInterval(() => {
+  loadHistory(HISTORY_30S_API, "history30s", "30S");
+  loadHistory(HISTORY_1M_API, "history1m", "1M");
+}, 5000);
+</script>
+
+</body>
+</html>
