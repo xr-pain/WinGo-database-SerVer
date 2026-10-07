@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>History & Sync API</title>
+  <title>History - 30S & 1M</title>
   <style>
     body {
       margin: 0;
@@ -49,6 +49,7 @@
       width: 10px;
       height: 10px;
       border-radius: 50%;
+      margin-right: 5px;
     }
     .dot.red { background: red; }
     .dot.green { background: lime; }
@@ -62,8 +63,11 @@
 </head>
 <body>
 
+  <!-- ========================= -->
+  <!-- HISTORY 1 : 30 SECOND -->
+  <!-- ========================= -->
   <div class="history-box">
-    <div class="history-title">HISTORY 1 — 30S DATA</div>
+    <div class="history-title">HISTORY — 30S DATA</div>
     <table>
       <thead>
         <tr>
@@ -79,8 +83,11 @@
     </table>
   </div>
 
+  <!-- ========================= -->
+  <!-- HISTORY 2 : ONE MINUTE -->
+  <!-- ========================= -->
   <div class="history-box">
-    <div class="history-title">HISTORY 2 — 1M DATA</div>
+    <div class="history-title">HISTORY — 1M DATA</div>
     <table>
       <thead>
         <tr>
@@ -97,20 +104,16 @@
   </div>
 
 <script>
-const HISTORY_30S_API = 'https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json';
-const HISTORY_1M_API = 'https://draw.ar-lottery01.com/WinGo/WinGo_1M/GetHistoryIssuePage.json';
-
 function createHistoryRow(item) {
   const num = Number.parseInt(item.number, 10);
   if (!Number.isInteger(num) || num < 0 || num > 9) return null;
 
   const period = String(item.issueNumber ?? "");
   const size = num >= 5 ? "Big" : "Small";
-  let color;
+  let color = 'green';
 
-  if ([1, 3, 7, 9].includes(num)) color = "green";
-  else if ([2, 4, 6, 8].includes(num)) color = "red";
-  else color = "violet";
+  if ([2, 4, 6, 8].includes(num)) color = "red";
+  else if (num === 0 || num === 5) color = "violet";
 
   const row = document.createElement("tr");
 
@@ -118,7 +121,7 @@ function createHistoryRow(item) {
   periodCell.textContent = period;
 
   const numberCell = document.createElement("td");
-  numberCell.className = "num " + color;
+  numberCell.className = "num " + (color.includes('red') ? 'red' : (color.includes('violet') ? 'violet' : 'green'));
   numberCell.textContent = num;
 
   const sizeCell = document.createElement("td");
@@ -126,8 +129,9 @@ function createHistoryRow(item) {
 
   const colorCell = document.createElement("td");
   const dot = document.createElement("span");
-  dot.className = "dot " + color;
+  dot.className = "dot " + (color.includes(',') ? color.split(',')[0] : color); 
   colorCell.appendChild(dot);
+  colorCell.append(color);
 
   row.appendChild(periodCell);
   row.appendChild(numberCell);
@@ -137,48 +141,20 @@ function createHistoryRow(item) {
   return row;
 }
 
-// সার্ভারে ডেটা সিংক্রোনাইজ করার ফাংশন
-async function syncDataToServer(type, list) {
-  try {
-    const formattedData = list.map(item => {
-      const num = Number.parseInt(item.number, 10);
-      const size = num >= 5 ? "Big" : "Small";
-      let color = [1, 3, 7, 9].includes(num) ? "green" : ([2, 4, 6, 8].includes(num) ? "red" : "violet");
-      
-      return {
-        Period: String(item.issueNumber ?? ""),
-        Number: num,
-        Size: size,
-        Colour: color,
-        Time: new Date().toLocaleTimeString()
-      };
-    });
-
-    await fetch('/api/sync-history', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type, data: formattedData })
-    });
-  } catch (err) {
-    console.error("Sync error:", err);
-  }
-}
-
-async function loadHistory(apiURL, tbodyID, label, typeKey) {
+async function loadHistory(type, tbodyID, label) {
   const tbody = document.getElementById(tbodyID);
   try {
-    const response = await fetch(apiURL + "?ts=" + Date.now(), { cache: "no-store" });
+    const response = await fetch(`/proxy/${type}?ts=` + Date.now(), { cache: "no-store" });
     if (!response.ok) throw new Error("Network error");
     
-    const data = await response.json();
-    if (!data.data || !Array.isArray(data.data.list)) throw new Error("Invalid API response");
+    const result = await response.json();
+    if (!result.success || !result.data || !Array.isArray(result.data.list)) {
+      throw new Error("Invalid API response");
+    }
 
-    const list = data.data.list.slice(0, 10);
-
-    // সার্ভারে ডেটা পাঠিয়ে দেওয়া হলো
-    syncDataToServer(typeKey, list);
-
+    const list = result.data.list.slice(0, 10);
     const fragment = document.createDocumentFragment();
+
     list.forEach(item => {
       const row = createHistoryRow(item);
       if (row) fragment.appendChild(row);
@@ -207,8 +183,8 @@ async function loadHistory(apiURL, tbodyID, label, typeKey) {
 }
 
 function runLoads() {
-  loadHistory(HISTORY_30S_API, "history30s", "30S", "30s");
-  loadHistory(HISTORY_1M_API, "history1m", "1M", "1m");
+  loadHistory('30s', 'history30s', '30S');
+  loadHistory('1m', 'history1m', '1M');
 }
 
 runLoads();
